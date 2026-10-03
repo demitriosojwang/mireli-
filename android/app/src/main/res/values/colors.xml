@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Brand colours mirrored from Mireli Web (msafiri/src/app/globals.css) so the
+      two applications read as one product:
+        navy   = Indian Ocean depth / trust / infrastructure
+        orange = sunset over Mombasa / warmth / movement
+        cream  = sand; a high-contrast backdrop that survives direct sunlight
+
+      Every state colour is paired with a TEXT LABEL in the UI. Colour alone
+      never carries meaning — a colour-blind driver, or one squinting into
+      coastal sun, must still be able to tell "boarded" from "not boarded".
+    -->
+    <color name="mireli_navy">#FF1F3A63</color>
+    <color name="mireli_navy_dark">#FF142845</color>
+    <color name="mireli_orange">#FFF2762E</color>
+    <color name="mireli_orange_dark">#FFC95A18</color>
+    <color name="mireli_cream">#FFFDF8F3</color>
+    <color name="mireli_surface">#FFFFFFFF</color>
+
+    <color name="mireli_success">#FF13795B</color>
+    <color name="mireli_warning">#FFB45309</color>
+    <color name="mireli_error">#FFB3261E</color>
+    <color name="mireli_on_primary">#FFFFFFFF</color>
+
+    <color name="mireli_text_primary">#FF0F172A</color>
+    <color name="mireli_text_secondary">#FF475569</color>
+    <color name="mireli_outline">#FFCBD5E1</color>
+</resources>

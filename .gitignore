@@ -1,0 +1,14 @@
+﻿node_modules/
+.next/
+.gradle/
+build/
+*.log
+.env
+.env.local
+*.keystore
+*.jks
+local.properties
+out.txt
+err.txt
+o.txt
+e.txt

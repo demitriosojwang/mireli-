@@ -1,0 +1,28 @@
+{
+  "name": "mireli-compliance-console",
+  "version": "0.1.0",
+  "private": true,
+  "//": "Standalone admin console for driver compliance + ride offers. Deliberately a SEPARATE Next.js app rather than a route inside msafiri: the passenger repo's tooling has twice silently rolled back uncommitted work, and compliance review is a different blast radius from the booking site.",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^16.1.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Network access to the shared Mi-Reli API. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Location: coarse + fine for positioning the vehicle during an ACTIVE trip.
+      Requested just-in-time, at the point the driver starts pickup duty.
+
+      We do NOT request ACCESS_BACKGROUND_LOCATION in the MVP. Continuous
+      background tracking is the single most common reason a transport app is
+      rejected from Google Play, and it requires a separate, demonstrable core
+      feature plus a Play declaration. Location is only needed while a trip is
+      running, so a foreground service started from a visible user action is
+      sufficient. Add it later ONLY if dispatch genuinely requires tracking while
+      the driver is merely available — and re-assess the Play declaration then.
+
+      Review before every release: https://support.google.com/googleplay/android-developer/answer/9799150
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!--
+      Foreground service so trip tracking survives a screen-off or app switch.
+      android:foregroundServiceType="location" is MANDATORY and is declared in
+      the service itself. Starting it is gated on Android 12+ rules, so the
+      service is always started from a user-initiated action.
+      See: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Assignment alerts and tracking notices. Refusal is handled gracefully. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Boarding verification by QR. Camera is requested ONLY when the driver
+         opens the scanner, and a manual code entry path always exists so a
+         driver without camera permission can still work. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Dialling dispatch / a passenger hands off to the dialler. We do NOT
+         request READ_CALL_LOG or answer calls: this app must never see a
+         driver's call history. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
+    <!--
+      Deliberately NOT requested anywhere in the MVP:
+        READ_SMS / RECEIVE_SMS   - OTP uses the supported system autofill, not
+                                   reading the inbox.
+        READ_CONTACTS            - no contact upload.
+        RECORD_AUDIO             - no recording.
+        MANAGE_EXTERNAL_STORAGE  - documents use the system photo picker.
+        QUERY_ALL_PACKAGES       - no competitor/app enumeration.
+        BIND_ACCESSIBILITY_SERVICE - an accessibility service would be a
+                                   serious Play policy red flag.
+      Any of these requires a separately justified feature and a policy review.
+    -->
+
+    <!-- Camera is optional: a driver must be able to run the app without it. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <application
+        android:name=".MireliDriverApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.MireliDriver"
+        tools:targetApi="34">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MireliDriver">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Trip tracking service. Declared as a location foreground service with
+          a visible, ongoing notification so the driver always knows when the app
+          is observing their position. The notification text must state plainly
+          what is shared and how to stop it — see TripTrackingService.
+        -->
+        <service
+            android:name=".service.TripTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- WorkManager is initialised on demand via Hilt, not via the default
+             initializer, so background sync can inject the repositories. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

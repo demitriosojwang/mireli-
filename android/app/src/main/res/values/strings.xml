@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mireli Driver</string>
+
+    <!-- Bottom navigation. Short, one word, thumb-friendly on a phone mount. -->
+    <string name="tab_today">Today</string>
+    <string name="tab_trips">Trips</string>
+    <string name="tab_earnings">Earnings</string>
+    <string name="tab_account">Account</string>
+
+    <!-- Sign in -->
+    <string name="signin_title">Driver sign in</string>
+    <string name="signin_subtitle">Use the phone number Mi-Reli has on file for you.</string>
+    <string name="signin_phone_label">Phone number</string>
+    <string name="signin_phone_hint">0712 345 678</string>
+    <string name="signin_send_code">Send code</string>
+    <string name="signin_code_label">Enter the 4-digit code</string>
+    <string name="signin_verify">Verify and continue</string>
+    <string name="signin_resend">Resend code</string>
+    <string name="signin_change_number">Change number</string>
+    <string name="signin_demo_hint">Demo build: use any 4-digit code</string>
+    <string name="signin_error_phone">Enter a valid phone number, e.g. 0712 345 678</string>
+
+    <!-- Today / availability -->
+    <string name="today_greeting">Karibu, %1$s</string>
+    <string name="today_no_trips_title">No trips assigned</string>
+    <string name="today_no_trips_body">Turn on availability and dispatch will send you work.</string>
+    <string name="availability_on">Available for work</string>
+    <string name="availability_off">Not available</string>
+    <string name="availability_on_body">You are listed to dispatch. Accepting work is still up to you.</string>
+
+    <!-- Assignment -->
+    <string name="assignment_accept">Accept trip</string>
+    <string name="assignment_decline">Decline</string>
+    <string name="assignment_decline_title">Tell dispatch why</string>
+    <string name="assignment_decline_hint">e.g. Vehicle breakdown</string>
+    <string name="assignment_decline_confirm">Send to dispatch</string>
+    <string name="assignment_state_pending">Awaiting your response</string>
+    <string name="assignment_state_accepted">You accepted this trip</string>
+    <string name="assignment_state_declined">You declined this trip</string>
+    <string name="assignment_state_withdrawn">Dispatch withdrew this trip</string>
+    <string name="assignment_state_expired">This trip is no longer active</string>
+    <string name="assignment_stale">This trip changed. Refresh to see the latest details.</string>
+
+    <string name="label_report_time">Report by</string>
+    <string name="label_departure_time">Road departure</string>
+    <string name="label_train">Train</string>
+    <string name="label_pickup">Pickup</string>
+    <string name="label_dropoff">Drop-off</string>
+    <string name="label_route">Route</string>
+<!-- Manifest & boarding -->
+    <string name="manifest_title">Passenger manifest</string>
+    <string name="manifest_empty">No passengers on this trip yet.</string>
+    <string name="manifest_summary">%1$d of %2$d boarded</string>
+    <string name="manifest_remaining">%1$d still expected</string>
+    <string name="boarding_state_not_boarded">Not boarded</string>
+    <string name="boarding_state_partial">Part boarded</string>
+    <string name="boarding_state_boarded">Boarded</string>
+    <string name="boarding_mark">Mark boarded</string>
+    <string name="boarding_count_title">How many boarded?</string>
+    <string name="boarding_confirm">Confirm boarding</string>
+    <string name="boarding_duplicate">Already recorded</string>
+    <string name="boarding_queued_offline">Saved on this phone. It will sync when you have signal.</string>
+    <string name="boarding_scan">Scan code</string>
+    <string name="boarding_enter_code">Enter code instead</string>
+    <string name="boarding_refused_not_on_trip">This passenger is not on your trip</string>
+    <string name="boarding_refused_cancelled">This booking was cancelled. Contact dispatch.</string>
+
+    <!-- Earnings -->
+    <string name="earnings_title">Earnings</string>
+    <string name="earnings_this_week">This week</string>
+    <string name="earnings_lifetime">All time</string>
+    <string name="earnings_shared">Shared trips</string>
+    <string name="earnings_charter">Charter trips</string>
+    <string name="earnings_queued">Awaiting payout</string>
+    <string name="earnings_paid">Paid</string>
+    <string name="earnings_failed">Payment failed</string>
+    <string name="earnings_gross">Gross fares</string>
+    <string name="earnings_commission">Mi-Reli commission (%1$d%%)</string>
+    <string name="earnings_surcharge">Door-to-door surcharge (paid in full)</string>
+    <string name="earnings_net">Your net</string>
+    <string name="earnings_breakdown_note">Commission is charged on the fare only. Door-to-door surcharges are paid to you in full.</string>
+    <string name="earnings_payout_note">Payouts run on the schedule set by Mi-Reli finance. Awaiting payout amounts are not yet sent.</string>
+    <string name="earnings_dispute">Query a trip</string>
+
+    <!-- Rides counter -->
+    <string name="rides_title">Rides</string>
+    <string name="rides_total">%1$d trips completed</string>
+    <string name="rides_shared_count">%1$d shared</string>
+    <string name="rides_charter_count">%1$d charter</string>
+    <string name="rides_seats_count">%1$d passengers carried</string>
+
+    <!-- Charter subscription -->
+    <string name="charter_title">Charter services</string>
+    <string name="charter_subtitle">Take whole-vehicle charter bookings in addition to scheduled shared trips.</string>
+    <string name="charter_subscribe">Request charter access</string>
+    <string name="charter_active">Charter access active</string>
+    <string name="charter_pending">Request received. Mi-Reli dispatch will contact you.</string>
+    <string name="charter_expires">Renews %1$s</string>
+    <string name="charter_disclaimer">Charter subscriptions are arranged with Mi-Reli management, not purchased in the app. Contact dispatch to activate.</string>
+    <string name="charter_cancel">Cancel charter access</string>
+
+    <!-- Account -->
+    <string name="account_title">Account</string>
+    <string name="account_vehicle">Your vehicle</string>
+    <string name="account_documents">Documents</string>
+    <string name="account_document_expiry">Expires %1$s</string>
+    <string name="account_document_approved">Approved</string>
+    <string name="account_document_pending">Under review</string>
+    <string name="account_document_rejected">Rejected</string>
+    <string name="account_signout">Sign out</string>
+    <string name="account_privacy">Privacy notice</string>
+    <string name="account_terms">Terms of service</string>
+    <string name="account_delete_request">Delete my data</string>
+    <string name="account_not_eligible_title">Documents need attention</string>
+
+    <!-- Offline & sync -->
+    <string name="offline_banner">Offline. Showing your last saved information.</string>
+    <string name="syncing">Syncing…</string>
+    <string name="pending_sync">%1$d change waiting to sync</string>
+    <string name="last_synced">Last updated %1$s</string>
+
+    <!-- Support -->
+    <string name="help_title">Help &amp; support</string>
+    <string name="help_call_dispatch">Call dispatch</string>
+    <string name="help_report_incident">Report a problem</string>
+    <string name="help_breakdown">Vehicle breakdown</string>
+    <string name="help_no_show">Passenger did not arrive</string>
+    <string name="help_safety">Safety concern</string>
+
+    <!-- Generic -->
+    <string name="retry">Try again</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="loading">Loading…</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="error_no_connection">No connection. We will update when you are back online.</string>
+    <string name="error_session_expired">Your session expired. Please sign in again.</string>
+    <string name="confirm">Confirm</string>
+</resources>
+    <string name="label_seats">Seats</string>
+    <string name="label_service_type">Service</string>
+    <string name="service_shared">Shared trip</string>
+    <string name="service_charter">Charter</string>
+    <string name="label_trip_earnings">Trip earnings (projected)</string>
+    <string name="earnings_projection_note">Projected only. Final amount is settled after the trip is completed and reconciled.</string>
+</resources>
