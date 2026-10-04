@@ -1,10 +1,10 @@
-// Structural checker for prisma/schema.prisma — verifies that every `model`
+﻿// Structural checker for prisma/schema.prisma â€” verifies that every `model`
 // block and every `{ ... }` braces balance, and that relation fields point at
 // models which actually exist. Catches the failure mode that a plain brace
 // counter misses: a model body that was truncated by an edit.
 import { readFileSync } from "node:fs";
 
-const FILE = "C:\\Users\\SOOQ ELASER\\Desktop\\msafiri\\prisma\\schema.prisma";
+const FILE = "C:\\Users\\SOOQ ELASER\\Desktop\\mireli driver\\backend\\prisma\\schema.prisma";
 const src = readFileSync(FILE, "utf8");
 
 // Balance check ignoring // and /// comments.
@@ -28,7 +28,7 @@ const modelBlocks = [...clean.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1]
 
 let failures = 0;
 if (depth !== 0 || negative) {
-  console.log(`UNBALANCED braces in schema.prisma — finalDepth=${depth}`);
+  console.log(`UNBALANCED braces in schema.prisma â€” finalDepth=${depth}`);
   failures++;
 }
 if (models.length !== modelBlocks.length) {

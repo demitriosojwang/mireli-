@@ -1,9 +1,9 @@
-// Fast SYNTAX check for the Mireli Driver backend AND the compliance console.
-// No type graph — this parses each file in isolation, so it finishes in well
+﻿// Fast SYNTAX check for the Mireli Driver backend AND the compliance console.
+// No type graph â€” this parses each file in isolation, so it finishes in well
 // under a second and does not need React/Next type definitions to load.
 //
 // WHY: full `tsc` on this project exceeds the command timeout here, and a
-// killed run leaves an empty output file that reads as "0 errors" — a false
+// killed run leaves an empty output file that reads as "0 errors" â€” a false
 // pass. This check cannot silently no-op: it exits non-zero on any parse error.
 //
 // Run: node scripts/syntax-check.mjs
@@ -136,3 +136,4 @@ if (todo.length) {
 }
 
 process.exit(failures > 0 ? 1 : 0);
+

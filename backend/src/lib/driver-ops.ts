@@ -149,6 +149,12 @@ export async function buildManifest(tripId: string) {
     summary: {
       bookings: parties.length,
       expectedSeats,
+boardedSeats,
+      remaining: Math.max(expectedSeats - boardedSeats, 0),
+      isCharter: parties.some((p) => p.isCharter),
+    },
+  };
+}
 /**
  * The assignment lifecycle as the DRIVER understands it - deliberately distinct
  * from the ops `Trip.status`, which describes the service, not the agreement.
@@ -261,33 +267,4 @@ export async function buildRideStats(driverId: string) {
       0
     ),
   };
-}
-      boardedSeats,
-      remaining: Math.max(expectedSeats - boardedSeats, 0),
-      isCharter: parties.some((p) => p.isCharter),
-    },
-  };
-}
-/**
- * Licence warnings that inform without blocking. A driver should learn about an
- * approaching expiry while they can still act on it, not on the morning work
- * stops.
- */
-function licenceWarnings(driver: { licenceExpiry: Date | null; licenceNumber: string | null }): string[] {
-  if (!driver.licenceNumber || !driver.licenceExpiry) return [];
-  const now = Date.now();
-  if (driver.licenceExpiry.getTime() >= now + 30 * 86_400_000) return [];
-  const days = Math.ceil((driver.licenceExpiry.getTime() - now) / 86_400_000);
-  return days < 0
-    ? ["Your driving licence has expired."]
-    : [`Your driving licence expires in ${days} day${days === 1 ? "" : "s"}.`];
-}
-
-/**
- * Is this trip assigned to this driver?
- * The single authorisation gate used by every driver endpoint.
- */
-export async function isAssignedToDriver(tripId: string, driverId: string): Promise<boolean> {
-  const trip = await db.trip.findUnique({ where: { id: tripId }, select: { driverId: true } });
-  return !!trip && trip.driverId === driverId;
 }

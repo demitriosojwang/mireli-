@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The requirement catalogue: what a driver must have before carrying Mi-Reli
  * passengers.
  *
@@ -6,7 +6,7 @@
  * it, so there is exactly one list rather than three that drift apart during an
  * inspection.
  *
- * â”€â”€ Sourcing and confidence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * ------ Sourcing and confidence ------------------------------------------------------------------------------------------------------------------------------------------------
  * Each requirement is tagged with how confident we are. This matters: an
  * onboarding list that is confidently wrong is more dangerous than one that is
  * visibly provisional, because the business will defend it in front of NTSA.
@@ -212,7 +212,8 @@ export const DRIVER_REQUIREMENTS: RequirementDef[] = [
       "Fatigue in a professional passenger driver is a safety risk. Tracked, but not yet enforced as a gate.",
     source: "Not confirmed in retrieved regulations - VERIFY with Mombasa County and counsel",
   },
-/** The state of one requirement for one driver. */
+];
+
 export interface CheckState {
   type: string;
   label: string;
@@ -354,7 +355,6 @@ export function evaluateEligibility(params: {
     policyVersion: params.policyVersionAccepted ?? ONBOARDING_POLICY_VERSION,
   };
 }
-];
 
 /** Fast lookup by document type. */
 export const REQUIREMENTS_BY_TYPE = new Map(
@@ -380,16 +380,3 @@ export function requirementsForDriver(driver: { capacity?: number | null }): Req
 
 /** The policy version a driver accepts at signup. Bump when the list changes. */
 export const ONBOARDING_POLICY_VERSION = "v1";
-    type: "psv_insurance",
-    label: "PSV comprehensive insurance certificate",
-    description:
-      "Must explicitly cover commercial/passenger use. A private third-party policy is not acceptable.",
-    issuingAuthority: "Registered Kenyan underwriter",
-    validityDays: 365,
-    confidence: "confirmed",
-    requiredFor: "all",
-    blocking: true,
-    rationale:
-      "Motor third-party property damage plus passenger bodily injury and death. An underinsured vehicle is a balance-sheet risk.",
-    source: "Insurance (Motor Vehicle Third Party Risks) Act",
-  },
