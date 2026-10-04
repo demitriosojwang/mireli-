@@ -7,7 +7,7 @@
 // pass. This check cannot silently no-op: it exits non-zero on any parse error.
 //
 // Run: node scripts/syntax-check.mjs
-import { readFileSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, statSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { createRequire } from "node:module";
 
@@ -18,22 +18,21 @@ const require = createRequire("C:/Users/SOOQ ELASER/Desktop/msafiri/package.json
 const ts = require("typescript/lib/typescript.js");
 
 const CONSOLE_ROOT = "C:\\Users\\SOOQ ELASER\\Desktop\\mireli driver\\console";
+const BACKEND_ROOT = "C:\\Users\\SOOQ ELASER\\Desktop\\mireli driver\\backend";
 
-const BACKEND = [
-  "src/lib/driver-auth.ts",
-  "src/lib/driver-ops.ts",
-  "src/lib/driver-onboarding.ts",
-  "src/lib/audit.ts",
+// Documents the driver-facing surface this backend must expose. Kept as a list
+// so a missing route is reported rather than silently skipped.
+const EXPECTED_ROUTES = [
   "src/app/api/driver/auth/route.ts",
   "src/app/api/driver/me/route.ts",
-  "src/app/api/driver/assignments/route.ts",
-  "src/app/api/driver/assignments/[tripId]/manifest/route.ts",
-  "src/app/api/driver/assignments/[tripId]/boardings/route.ts",
-  "src/app/api/driver/earnings/route.ts",
   "src/app/api/driver/offers/route.ts",
   "src/app/api/driver/offers/[id]/respond/route.ts",
   "src/app/api/driver/onboarding/route.ts",
   "src/app/api/driver/onboarding/documents/route.ts",
+  "src/app/api/driver/assignments/route.ts",
+  "src/app/api/driver/assignments/[tripId]/manifest/route.ts",
+  "src/app/api/driver/assignments/[tripId]/boardings/route.ts",
+  "src/app/api/driver/earnings/route.ts",
   "src/app/api/driver/charter-subscription/route.ts",
   "src/app/api/admin/onboarding/route.ts",
 ];
@@ -49,8 +48,24 @@ function walkConsole(dir, acc = []) {
   return acc;
 }
 
+/** Walk the standalone backend for .ts/.tsx. */
+function walkBackend(dir, acc = []) {
+  if (!existsSync(dir)) return acc;
+  for (const n of readdirSync(dir)) {
+    if (n === "node_modules" || n === ".next") continue;
+    const full = join(dir, n);
+    if (statSync(full).isDirectory()) walkBackend(full, acc);
+    else if (/\.(ts|tsx)$/.test(n)) acc.push(full);
+  }
+  return acc;
+}
+
 const targets = [
-  ...BACKEND.map((r) => ({ root: "C:\\Users\\SOOQ ELASER\\Desktop\\msafiri", rel: r })),
+  // The driver backend lives in THIS repo, not in msafiri.
+  ...walkBackend(BACKEND_ROOT).map((f) => ({
+    root: BACKEND_ROOT,
+    rel: relative(BACKEND_ROOT, f),
+  })),
   ...walkConsole(CONSOLE_ROOT).map((f) => ({
     root: CONSOLE_ROOT,
     rel: relative(CONSOLE_ROOT, f),
@@ -102,7 +117,22 @@ for (const { root, rel } of targets) {
 }
 
 console.log(`\nsyntax check: ${checked} files, ${failures} with errors`);
+
 if (missing.length) {
-  console.log(`missing (not built yet / wiped): ${missing.length}`);
+  console.log(`missing: ${missing.length}`);
 }
+
+// Report which routes are not built yet, so the surface gap is explicit rather
+// than something you discover when the app 404s.
+const routeSet = new Set(
+  walkBackend(join(BACKEND_ROOT, "src")).map((f) =>
+    relative(join(BACKEND_ROOT, "src"), f).replace(/\\/g, "/")
+  )
+);
+const todo = EXPECTED_ROUTES.filter((r) => !routeSet.has(r.replace(/\\/g, "/")));
+if (todo.length) {
+  console.log(`\nAPI routes not built yet (${todo.length}):`);
+  todo.forEach((r) => console.log(`  ${r}`));
+}
+
 process.exit(failures > 0 ? 1 : 0);
