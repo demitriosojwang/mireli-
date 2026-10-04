@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The requirement catalogue: what a driver must have before carrying Mi-Reli
  * passengers.
  *
@@ -6,7 +6,7 @@
  * it, so there is exactly one list rather than three that drift apart during an
  * inspection.
  *
- * ── Sourcing and confidence ────────────────────────────────────────────────
+ * â”€â”€ Sourcing and confidence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * Each requirement is tagged with how confident we are. This matters: an
  * onboarding list that is confidently wrong is more dangerous than one that is
  * visibly provisional, because the business will defend it in front of NTSA.
@@ -124,7 +124,6 @@ export const DRIVER_REQUIREMENTS: RequirementDef[] = [
     rationale: "Tax compliance, and a prerequisite of the PSV badge application itself.",
     source: "NTSA TIMS registration requires KRA PIN; Income Tax Act",
   },
-  {
 {
     type: "inspection_sticker",
     label: "NTSA inspection sticker / inspection report",
