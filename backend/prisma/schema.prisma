@@ -1,0 +1,556 @@
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// MIRELI DRIVER --- SCHEMA
+//
+// This is the single source of truth for drivers, driver compliance, onboarding
+// and ride offers. The passenger site keeps bookings, trips and money; this
+// service keeps driver-side operations. They join on `Trip.driverId`.
+//
+// Three design rules that run through the whole file:
+//
+//  1. DOCUMENT APPROVED IS NOT THE SAME AS DRIVER APPROVED. A driver can hold
+//     every perfect document and still be ineligible --- a licence discovered
+//     revoked, a vehicle swapped for one without a PSV licence. Eligibility is
+//     computed from the approved set on every check, never stored in a boolean.
+//
+//  2. AN EXPIRED DOCUMENT BLOCKS NEW WORK; IT NEVER CANCELS A RUNNING TRIP. A
+//     vehicle full of passengers is not made safer by an admin pressing a
+//     button. Expiry gates the next assignment and raises a dispatch task.
+//
+//  3. THE DRIVER NEVER SEES A STORAGE KEY. Upload intents return a short-lived
+//     signed URL; the driver sees their own document's review state, nothing
+//     more.
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --------- People ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+model Passenger {
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  name        String?
+  email       String?
+  idType      String?
+  idNumber    String?
+  nationality String?
+  gender      String?
+  createdAt   DateTime @default(now())
+}
+
+// --------- Drivers ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// The Driver model is the SHARED record. `status` is the single authority for
+// whether a driver may receive work; every write path re-checks it server-side,
+// so the app can never be trusted to hide ineligible work.
+
+model Driver {
+  id          String  @id @default(cuid())
+  name        String
+  phone       String  @unique
+  mpesaNumber String
+  plate       String
+  cabType     String
+  capacity    Int
+  status      String  @default("active") // active | inactive | suspended
+  rating      Float   @default(4.8)
+  createdAt   DateTime @default(now())
+
+  // ------ Identity & eligibility (admin-managed, enforced by the API) ---------------------------------
+  // A verified phone proves control of a NUMBER. It does NOT prove the person
+  // is licensed to carry passengers; that comes from these fields plus the
+  // reviewed document set.
+  licenceNumber         String?
+  licenceClass          String? // e.g. BCE --- the class required for PSV work
+  licenceExpiry         DateTime?
+  nationalId            String? // driver's own ID --- restricted, never in a manifest
+  subscriptionActive    Boolean   @default(false)
+  subscriptionExpiresAt DateTime?
+
+  // Reason + actor for a status change, so a driver can be told WHY they were
+  // suspended and support can answer the question later.
+  statusReason    String?
+  statusChangedAt DateTime?
+  statusChangedBy String?
+
+  // ------ Availability (set by the driver app, read by dispatch) ------------------------------------------------
+  available      Boolean   @default(false) // the driver's own duty toggle
+  availableSince DateTime?
+  lastSeenAt     DateTime? // last authenticated activity --- ops visibility only
+
+  // ------ Counters (display accelerators for the "Rides" tile) ------------------------------------------------------
+  // Derived truth remains the completed Trip / PayoutRecord rows on the
+  // passenger side. A reconciliation query must reproduce these numbers.
+  tripsCompleted        Int @default(0)
+  charterTripsCompleted Int @default(0)
+  sharedTripsCompleted  Int @default(0)
+  passengerSeatsCarried Int @default(0)
+
+  sessions       DriverSession[]
+  documents      DriverDocument[]
+  onboarding     DriverOnboarding?
+  subscriptions  CharterSubscription[]
+  notifications  DriverNotification[]
+  offersDirected RideOffer[]        @relation("OfferedTo")
+  offerResponses RideOfferResponse[]
+  trips          Trip[]
+}
+
+/// A driver login session for the Android app. Deliberately NOT the web's
+/// signed cookie: a phone app needs bearer tokens it can refresh and revoke per
+/// device, and losing a phone must not require a server-side session wipe.
+///
+/// The raw token is never stored --- only its SHA-256. `tokenHash` is unique, so
+/// a leaked database cannot be replayed as a live session.
+model DriverSession {
+  id          String    @id @default(cuid())
+  driverId    String
+  driver      Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  deviceId    String? // app-generated stable install identifier
+  deviceLabel String?
+  appVersion  String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+
+  @@index([driverId])
+  @@index([expiresAt])
+}
+
+/// One driver's journey from "applied" to "cleared to drive".
+///
+/// Status is a lifecycle, not a flag:
+///   applied --- under_review --- approved | rejected
+///   approved --- suspended (docs lapsed / conduct) --- approved (re-verified)
+///
+/// `version` is bumped on every reviewer action and is the optimistic-concurrency
+/// token, so two compliance officers cannot silently overwrite each other.
+model DriverOnboarding {
+  id       String @id @default(cuid())
+  driverId String @unique
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  status   String @default("applied") // applied|under_review|approved|rejected|suspended|withdrawn
+  version  Int    @default(0)
+
+  // What the driver agreed to, and when. Without this, a later policy change
+  // cannot be shown to have been accepted --- which is exactly the dispute a
+  // regulator or an aggrieved driver will have.
+  policyVersionAccepted String?
+  acceptedAt            DateTime?
+  consentEvidenceKey    String? // signed consent capture, private
+
+  // Verification state, computed server-side. `blockedReasons` is what the app
+  // shows the driver; it is never a client-supplied value.
+  blockedReasons String?
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  reviewNotes    String?
+
+  // Next action owner: "driver" (upload more) or "compliance" (review this).
+  // Drives the ops queue so a stalled application is visible, not forgotten.
+  awaitingOn     String?
+  lastReminderAt DateTime?
+  expiresAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checks  OnboardingCheck[]
+  history OnboardingEvent[]
+}
+
+/// One required document/requirement, evaluated for one driver.
+///
+/// This is what makes the onboarding list auditable: "why can this driver not
+/// take work?" becomes a queryable fact with a named rule, not a vague note.
+///
+/// `requiredFor` distinguishes a document required of EVERY driver from one
+/// required only in a particular situation (e.g. a speed-governor certificate
+/// only applies in its weight/class band). Hard-coding everything as "always
+/// required" is how an onboarding list becomes technically wrong.
+model OnboardingCheck {
+  id           String   @id @default(cuid())
+  onboardingId String
+  onboarding   DriverOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  docType      String
+  label        String
+
+  // all | charter | vehicle_over_3048kg | pilot_program
+  requiredFor String  @default("all")
+  // missing | uploaded | in_review | approved | rejected | expired | superseded
+  state       String  @default("missing")
+  blocking    Boolean @default(true)
+
+  // Validity window as verified by compliance. Distinct from the document's own
+  // printed expiry: a reviewer may impose a SHORTER validity (e.g. accept an
+  // insurance certificate for 6 months pending the annual renewal).
+  validFrom      DateTime?
+  validUntil     DateTime?
+  expiryWarnedAt DateTime?
+
+  reviewedBy String?
+  reviewedAt DateTime?
+  note       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([onboardingId, docType, requiredFor])
+  @@index([state, blocking])
+  @@index([validUntil])
+}
+
+/// Append-only audit of every onboarding decision, for compliance disputes and
+/// for answering "who approved this driver and when?" months later.
+model OnboardingEvent {
+  id           String   @id @default(cuid())
+  onboardingId String
+  onboarding   DriverOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  type         String
+  actorId      String?
+  actorRole    String? // driver | admin | system
+  detail       String? // JSON, minimal --- no raw document contents
+  createdAt    DateTime @default(now())
+
+  @@index([onboardingId, createdAt])
+}
+
+/// Compliance documents. Private objects in closed storage, never public URLs.
+/// `expiresAt` drives the eligibility check that BLOCKS NEW assignments; it does
+/// NOT yank an in-progress trip --- a driver already carrying passengers must be
+/// able to finish the journey and reach help safely (see the ops runbook).
+model DriverDocument {
+  id           String    @id @default(cuid())
+  driverId     String
+  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  type         String // licence | psv_badge | insurance | inspection | national_id | other
+  storageKey   String // private object-store key --- NOT a URL
+  displayName  String?
+  status       String    @default("pending") // pending | approved | rejected | superseded
+  rejectReason String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([driverId, type])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+/// Charter entitlement --- the driver-visible side of the subscription button.
+///
+/// Money is deliberately NOT modelled here: a subscription is a commercial
+/// relationship whose settlement must flow through the same audited ledger as
+/// fares. This records entitlement plus the terms version the driver accepted,
+/// so later edits cannot rewrite what they agreed to. Proration, tax and refunds
+/// remain the accountant's call, not a developer's.
+model CharterSubscription {
+  id           String    @id @default(cuid())
+  driverId     String
+  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  plan         String
+  status       String    @default("pending") // pending | active | expired | cancelled
+  amount       Int // agreed price in KSh minor units --- display reference only
+  currency     String    @default("KES")
+  startsAt     DateTime?
+  endsAt       DateTime?
+  termsVersion String    @default("v1")
+  autoRenew    Boolean   @default(true)
+  cancelledAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([driverId, status])
+}
+
+// --------- Network ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/// A Madaraka Express service the feeder shuttles are timed against.
+model Train {
+  id             String    @id @default(cuid())
+  name           String // Inter-County | Express | Night Train
+  direction      String // MBA_TO_NBO | NBO_TO_MBA
+  originTime     String // "HH:MM" at the origin terminus
+  destTime       String // "HH:MM" at the destination terminus
+  active         Boolean   @default(true)
+  lastVerifiedAt DateTime?
+  source         String?
+  trips          Trip[]
+}
+
+model Route {
+  id              String  @id @default(cuid())
+  name            String
+  durationMinutes Int
+  charterPrice    Int
+  active          Boolean @default(true)
+  stages          RouteStage[]
+  trips           Trip[]
+}
+
+model RouteStage {
+  id            String @id @default(cuid())
+  routeId       String
+  route         Route  @relation(fields: [routeId], references: [id])
+  name          String
+  order         Int // 0 = the terminus
+  lat           Float
+  lng           Float
+  fare          Int // per-seat fare from the origin (KSh)
+  homeSurcharge Int // door-to-door surcharge per seat --- passes to driver in full
+}
+
+// --------- Trips ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+/// A scheduled departure a driver may be assigned to.
+///
+/// `driverId` set is a DECISION by dispatch; `acknowledgedAt` is the driver's
+/// CONTRACT. Both matter, and only the second one means "yes".
+model Trip {
+  id          String   @id @default(cuid())
+  routeId     String
+  route       Route    @relation(fields: [routeId], references: [id])
+  driverId    String?
+  driver      Driver?  @relation(fields: [driverId], references: [id])
+  direction   String // FROM_TERMINUS | TO_TERMINUS
+  departureAt DateTime
+  capacity    Int
+  bookedSeats Int      @default(0)
+  status      String   @default("scheduled") // scheduled|locked|departed|completed|cancelled
+  lockedAt    DateTime?
+  lockReason  String? // seat_threshold | cutoff
+  departedAt  DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  trainId String?
+  train   Train? @relation(fields: [trainId], references: [id])
+
+  // ------ Assignment lifecycle ---------------------------------------------------------------------------------------------------------------------------------------------------
+  assignedAt         DateTime?
+  acknowledgedAt     DateTime? // driver accepted --- the only "yes" that counts
+  declinedAt         DateTime?
+  declineReason      String?
+  withdrawnAt        DateTime?
+  withdrawalReason   String?
+  assignmentVersion  Int       @default(0)
+  assignmentDeadline DateTime? // server-enforced ack deadline
+
+  // ------ Reporting vs road departure ------------------------------------------------------------------------------------------------------------------------------
+  // Kept distinct on purpose. An SGR-linked transfer has three different times:
+  // the train event, when the driver must REPORT, and when the vehicle LEAVES.
+  // Collapsing them is how a driver waits an hour early, or leaves after the
+  // train has gone.
+  reportAt        DateTime?
+  roadDepartedAt  DateTime?
+  arrivedAtPickup DateTime?
+
+  // ------ Execution truth (server-observed, never client-asserted) ---------------------------------------
+  boardedCount    Int     @default(0) // always recomputed from BoardingRecord
+  expectedSeats   Int     @default(0) // snapshot at lock, for reconciliation
+  isCharter       Boolean @default(false)
+  charterName     String?
+  serviceType     String  @default("shared") // shared | charter
+  version         Int     @default(0)
+  cancelledReason String?
+  incidentFlagged Boolean @default(false)
+  notes           String? // dispatch instruction shown to the driver
+
+  bookings Booking[]
+  events   TripEvent[]
+  boardings BoardingRecord[]
+  offers   RideOffer[]
+
+  @@index([driverId, departureAt])
+  @@index([status, departureAt])
+}
+
+  /// A work offer a driver can accept --- the "Accept a ride" action.
+///
+/// WHY THIS IS SEPARATE FROM `Trip.driverId`
+/// Dispatch can pre-assign a driver to a scheduled trip, but that is a
+/// DECISION, not a CONTRACT. The master plan is explicit that
+/// `proposed --- acknowledged --- active` is the driver's decision, and that a
+/// driver must be able to decline without penalty. An offer models that moment
+/// explicitly rather than leaving `driverId` set on a trip the driver never saw.
+///
+/// FIRST-ACCEPT-WINS is enforced by a conditional update in the API, not by the
+/// UI. Two drivers tapping "Accept" in the same second must produce ONE
+/// assignment; the loser gets an honest "someone else got there first" rather
+/// than a double-booked vehicle carrying one set of passengers.
+model RideOffer {
+  id     String @id @default(cuid())
+  tripId String
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  // Null = open to all eligible drivers. Non-null = directed at one driver.
+  offeredToId String?
+  offeredTo   Driver? @relation("OfferedTo", fields: [offeredToId], references: [id])
+  status      String  @default("offered") // offered|accepted|declined|expired|withdrawn
+
+  // An offer without a deadline is an offer a driver will accept while sitting
+  // at a stage an hour later. Expiry is enforced server-side ON READ, not by a
+  // cleanup job, so a stale offer can never be accepted.
+  expiresAt     DateTime?
+  acceptedAt    DateTime?
+  declinedAt    DateTime?
+  declineReason String?
+  acceptedById  String?
+  version       Int      @default(0)
+
+  // Denormalised for the offer card so the app renders "Accept" without a
+  // second round trip. Always labelled PROJECTED in the UI.
+  projectedNet Int      @default(0)
+  pickupLabel  String?
+  createdById  String? // admin id, or "system"
+  createdAt    DateTime @default(now())
+
+  responses RideOfferResponse[]
+
+  @@index([status, expiresAt])
+  @@index([offeredToId, status])
+  @@index([tripId])
+}
+
+/// Append-only record of every driver who saw and answered an offer.
+///
+/// Kept even for declines: "how many drivers were offered this and how many
+/// turned it down" is the most useful operational signal for tuning a schedule,
+/// and it is unrecoverable once the offer row is gone.
+model RideOfferResponse {
+  id        String    @id @default(cuid())
+  offerId   String
+  offer     RideOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  driverId  String
+  driver    Driver    @relation(fields: [driverId], references: [id])
+  outcome   String // accepted | declined | seen
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([offerId])
+  @@index([driverId])
+}
+///
+/// `readAt` is a UI convenience only --- it is never evidence that a driver was
+/// notified. That is why assignment deadlines are enforced on the server clock
+/// and escalated to dispatch independently of message delivery.
+model DriverNotification {
+  id        String   @id @default(cuid())
+  driverId  String
+  driver    Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  tripId    String?
+  type      String // assignment | withdrawn | document_expiring | payout | dispatch_update | info
+  title     String
+  body      String
+  severity  String   @default("info") // info | action_required | urgent
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  @@index([driverId, createdAt])
+}
+
+/// A passenger booking on a trip. Owned by the passenger site; this service
+/// reads it to build manifests and writes only boarding state.
+///
+/// The snapshot fields are FROZEN at booking time so the manifest a driver sees
+/// cannot change underneath them because a profile was edited later.
+model Booking {
+  id        String    @id @default(cuid())
+  tripId    String
+  trip      Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  code      String    @unique // MR-XXXXXX
+  seats     Int       @default(1)
+  isCharter Boolean   @default(false)
+
+  // The driver sees a name and a contact number. They never see fare, payment
+  // state, ID number or email - see buildManifest() for why.
+  passengerName  String?
+  passengerPhone String?
+
+  stageName     String?
+  homePickup    Boolean   @default(false)
+  homeAddress   String?
+  homeSurcharge Int       @default(0)
+
+  fareAmount  Int
+  status      String    @default("confirmed") // confirmed|boarded|completed|cancelled|no_show
+  checkedInAt DateTime?
+
+  boardedAt    DateTime?
+  boardedBy    String? // "driver" | "dispatch" - never inferred
+  boardedCount Int     @default(0) // partial boarding is real: 3 of 5 arrived
+
+  boardings BoardingRecord[]
+
+  @@index([tripId, status])
+}
+
+/// Append-only history of what happened to a trip, written by dispatch AND by
+/// driver actions, so a delayed, failed or reassigned trip can be explained
+/// afterwards without guessing.
+model TripEvent {
+  id             String   @id @default(cuid())
+  tripId         String
+  trip           Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  type           String // assigned|acknowledged|declined|withdrew|departed|completed|incident
+  actorId        String?
+  actorName      String?
+  actorRole      String? // driver | admin | system
+  detail         String? // JSON, minimal - no raw documents or locations
+  clientActionId String? // the app's command id - makes retries idempotent
+  createdAt      DateTime @default(now())
+
+  @@unique([tripId, clientActionId])
+  @@index([tripId, createdAt])
+}
+
+/// One passenger party's boarding, recorded once.
+///
+/// `clientActionId` is the offline/retry guarantee: the app generates a stable
+/// command id before it has connectivity, and replaying it cannot board anyone
+/// twice. A duplicate scan resolves to the ORIGINAL outcome instead of
+/// incrementing `boardedCount` again - the exact failure that would otherwise
+/// silently inflate revenue attribution and overwrite a genuine no-show.
+model BoardingRecord {
+  id             String   @id @default(cuid())
+  tripId         String
+  trip           Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  bookingId      String
+  booking        Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  count          Int      @default(1)
+  method         String   @default("code") // qr | code | manual | dispatch
+  boardedBy      String // driver id, or "dispatch"
+  boardedAt      DateTime @default(now())
+  clientActionId String   @unique
+  deviceId       String?
+  syncState      String   @default("confirmed")
+  note           String? // e.g. "2 of 4 arrived"
+
+  @@index([tripId])
+  @@index([bookingId])
+}
+
+/// Append-only audit log across every driver-side action, so "who approved
+/// this driver and when?" is answerable months later.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actorName String
+  actorRole String // driver | admin | system
+  action    String
+  entity    String
+  entityId  String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
